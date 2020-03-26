@@ -1,4 +1,4 @@
-module github.com/rcompos/interview-rcompos-34496760ef0f466f817426a752f4a1c5
+module github.com/rcompos/memza
 
 go 1.14
 
