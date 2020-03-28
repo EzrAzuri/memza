@@ -6,27 +6,26 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
 
-	//"strings"
-	"io"
-	//"math"
-
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
 const devilsBytes int = 61
-const bufferSizeMax int = 1024*1024 - devilsBytes
+const valueSizeMax int = 1024*1024 - devilsBytes
 
 // RetrieveFile get file contents for given key filename
-func RetrieveFile(f, mserver, outFile string, max int64, dbug bool) error {
+func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 
 	// Get number of required chunks for file
-	filehash, num, errGet := Getter(mserver, f, dbug)
-	check(errGet)
+	filehash, num, errGet := getter(mserver, f, dbug)
+	if errGet != nil {
+		return errGet
+	}
 
 	if dbug == true {
 		fmt.Printf("RetrieveFile ->\n")
@@ -35,39 +34,48 @@ func RetrieveFile(f, mserver, outFile string, max int64, dbug bool) error {
 		fmt.Printf("Filehash: %x\n", string(filehash))
 	}
 
-	// open file
+	// Open file
 	file, errCreate := os.Create(outFile)
-	check(errCreate)
+	if errCreate != nil {
+		return errCreate
+	}
 	defer file.Close()
 
 	// reconstitute
 	for i := 1; i <= int(num); i++ {
 		chunkKey := f + "-" + strconv.Itoa(i)
 		// Get single chunk
-		chunkItem, _, err := Getter(mserver, chunkKey, dbug)
-		check(err)
-		// write file
+		chunkItem, _, err := getter(mserver, chunkKey, dbug)
+		if err != nil {
+			return err
+		}
+		// Write file
 		n2, werr := file.Write(chunkItem)
 		if dbug == true {
 			fmt.Printf("chunkKey: %s\n", chunkKey)
 			fmt.Printf("\tchunk: %v\n", i)
 			fmt.Printf("\tBytes written: %d\n", n2)
-			check(werr)
+
+			if werr != nil {
+				return werr
+			}
 		}
 	}
 
 	// Read newly created file
 	data, errRead := ioutil.ReadFile(outFile)
-	check(errRead)
+	if errRead != nil {
+		return errRead
+	}
+
 	// Hash the file and output results
 	newHash := sha256.Sum256(data)
 
 	fmt.Printf("%s %x\n", outFile, newHash)
 
 	//badHash := []byte{'1', '9', 'a', 'f'} // For TESTING ONLY
-	//compareResult := bytes.Compare(filehash[:], badHash)
+
 	compareResult := bytes.Compare(filehash[:], newHash[:])
-	//fmt.Printf("Hash compare: %v\n", compareResult)
 	var err error
 	if compareResult != 0 {
 		err = errors.New("hash mismatch")
@@ -78,14 +86,14 @@ func RetrieveFile(f, mserver, outFile string, max int64, dbug bool) error {
 }
 
 // StoreFile key: filename, value: file contents
-func StoreFile(f, mserver string, max int64, dbug bool) error {
+func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 
-	bufferSize := bufferSizeMax - len(f)
+	bufferSize := valueSizeMax - len(f)
 
 	// Get number of required chunks for file
 	num, shasum, err := numChunks(f, bufferSize, max, dbug)
 	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
+		return err
 	}
 
 	if dbug == true {
@@ -98,12 +106,16 @@ func StoreFile(f, mserver string, max int64, dbug bool) error {
 	}
 
 	// Set key named after file with value of shasum
-	errSetterFile := Setter(mserver, f, shasum[:], uint32(num), 0)
-	check(errSetterFile)
+	errSetterFile := setter(mserver, f, shasum[:], uint32(num), 0, dbug, force)
+	if errSetterFile != nil {
+		return err
+	}
 
-	// open file
-	file, err := os.Open(f)
-	check(err)
+	// Open file
+	file, errOpen := os.Open(f)
+	if errOpen != nil {
+		return errOpen
+	}
 	defer file.Close()
 
 	buffer := make([]byte, bufferSize)
@@ -112,14 +124,13 @@ func StoreFile(f, mserver string, max int64, dbug bool) error {
 		bytesread, err := file.Read(buffer)
 		if err != nil {
 			if err != io.EOF {
-				fmt.Println(err)
+				return err
 			}
 			break
 		}
 		buff := buffer[:bytesread]
 
 		// Set file contents
-		//fileKey := f + "-" + strconv.Itoa(i) + "-" + hex.EncodeToString(shasum)
 		fileKey := f + "-" + strconv.Itoa(i)
 
 		if dbug == true {
@@ -128,8 +139,10 @@ func StoreFile(f, mserver string, max int64, dbug bool) error {
 			fmt.Printf("\tKey: %v\n", fileKey)
 		}
 
-		errSetterHash := Setter(mserver, fileKey, buff, 0, 0)
-		check(errSetterHash)
+		errSetterHash := setter(mserver, fileKey, buff, 0, 0, dbug, force)
+		if errSetterHash != nil {
+			return errSetterHash
+		}
 
 		i++
 	}
@@ -138,19 +151,27 @@ func StoreFile(f, mserver string, max int64, dbug bool) error {
 
 }
 
-// Setter is good for setting mcache values
-func Setter(mserver, key string, val []byte, fla uint32, exp int32) error {
+// setter is for setting mcache values
+func setter(mserver, key string, val []byte, fla uint32, exp int32, dbug, force bool) error {
 	mc := memcache.New(mserver)
+
+	// Check for pre-existing key
+	_, _, errGet := getter(mserver, key, dbug)
+	if errGet == nil && force != true {
+		log.Fatal("key exists")
+	}
+
 	// Set key
 	//fmt.Printf("Set key -> %s\tvalue: %s\tflag: %d\texp: %d\n", key, val, fla, exp)
-	//mc.Set(&memcache.Item{Key: "foo", Value: []byte("baarr")})
-	//mc.Set(&memcache.Item{Key: key, Value: []byte(val), Flags: fla, Expiration: exp})
 	err := mc.Set(&memcache.Item{Key: key, Value: val, Flags: fla, Expiration: exp})
+	if err != nil {
+		log.Fatal(err)
+	}
 	return err
 }
 
-// Getter is good for getting mcache values
-func Getter(mserver, key string, dbug bool) ([]byte, uint32, error) {
+// getter is for getting mcache values
+func getter(mserver, key string, dbug bool) ([]byte, uint32, error) {
 	mc := memcache.New(mserver)
 	// Get key
 	if dbug == true {
@@ -158,17 +179,8 @@ func Getter(mserver, key string, dbug bool) ([]byte, uint32, error) {
 	}
 	myitem, err := mc.Get(key)
 	if err != nil {
-		fmt.Printf("%v", err)
+		log.Fatal(err)
 	}
-
-	/*
-		fmt.Printf("item: %v\n", myitem)
-		fmt.Printf("key: %v\n", myitem.Key)
-		fmt.Printf("value: %v\n", string(myitem.Value))
-		fmt.Printf("flags: %d\n", myitem.Flags)
-		//fmt.Printf("expiration: %d\n", myitem.Expiration)
-	*/
-
 	return myitem.Value, myitem.Flags, err
 }
 
@@ -178,7 +190,6 @@ func CheckServer(memcachedServer string) error {
 	fmt.Println("Memza->CheckServer->")
 
 	//mc := memcache.New("10.0.0.1:11211", "10.0.0.2:11211", "10.0.0.3:11212")
-	//mc := memcache.New("localhost:11211")
 	mc := memcache.New(memcachedServer)
 
 	// Check connection to memcached server
@@ -186,7 +197,7 @@ func CheckServer(memcachedServer string) error {
 	errPing := mc.Ping()
 	if errPing != nil {
 		fmt.Printf("ping failed!\n")
-		fmt.Println("ERROR: %v", errPing)
+		fmt.Printf("ERROR: %v", errPing)
 	}
 	fmt.Printf("ping successfull!\n")
 
@@ -195,7 +206,6 @@ func CheckServer(memcachedServer string) error {
 	valIn := "baarrr"
 	fmt.Printf("Set Item\n")
 	fmt.Printf("Set key -> %s\tvalue: %s\n", keyIn, valIn)
-	//mc.Set(&memcache.Item{Key: "foo", Value: []byte("baarr")})
 	mc.Set(&memcache.Item{Key: keyIn, Value: []byte(valIn)})
 
 	// Get key
@@ -217,17 +227,17 @@ func CheckServer(memcachedServer string) error {
 // numChunks determine number of chunks needed
 func numChunks(fileName string, chunksize int, max int64, dbug bool) (int, [32]byte, error) {
 
-	//mc := memcache.New(mserver)
-	// Set key
-	//fmt.Printf("Evaluate key -> %s\tvalue: %s\tflag: %d\texp: %d\n", key, val, fla, exp)
-	sizeBytes := fileSize(fileName)
+	sizeBytes, errFS := fileSize(fileName)
+	if errFS != nil {
+		return 0, [32]byte{}, errFS
+	}
 
 	// Empty file check
 	if sizeBytes == 0 {
-		return 0, [32]byte{}, errors.New("Zero file size!")
+		return 0, [32]byte{}, errors.New("zero file size")
 	}
 
-	// Max size check - 50MB
+	// Max file size check
 	if sizeBytes > max {
 		fmt.Printf("Max size: %d\n", max)
 		errMsg := fmt.Sprintf("ERROR: File too large: %d\n", sizeBytes)
@@ -235,21 +245,18 @@ func numChunks(fileName string, chunksize int, max int64, dbug bool) (int, [32]b
 	}
 
 	data, err := ioutil.ReadFile(fileName)
-	check(err)
+	if err != nil {
+		return 0, [32]byte{}, err
+	}
 
 	fileSHA256 := sha256.Sum256(data)
 
-	// Hash the file and output results
-	//fmt.Printf("SHA-256: %x\n", sha256.Sum256(data))
-
 	// Figure out how many 1MB chunks
-	//floatChunks := float64(sizeBytes) / (1024 * 1024)
 	floatChunks := float64(sizeBytes) / float64(chunksize)
 
-	//intChunks := math.Floor(floatChunks)
 	intChunks := int(floatChunks)
 	if floatChunks > float64(intChunks) {
-		intChunks += 1
+		intChunks++
 	}
 
 	if dbug == true {
@@ -260,32 +267,24 @@ func numChunks(fileName string, chunksize int, max int64, dbug bool) (int, [32]b
 		fmt.Printf("Chunks (1MB) Int: %d\n", intChunks)
 	}
 
-	//return intChunks, fileSHA256[:], err
 	return intChunks, fileSHA256, err
 
 }
 
-// HelpMe provides help usage message
+// HelpMe provides help usage message and exits
+// Used by CLI
 func HelpMe(msg string) {
 	if msg != "" {
 		fmt.Printf("%s\n\n", msg)
 	}
+	fmt.Println("Store file in memcached")
 	fmt.Println("Supply file name i.e. /path/to/myfile.txt")
 	flag.PrintDefaults()
 	os.Exit(1)
 }
 
 // fileSize checks file size
-func fileSize(f string) int64 {
+func fileSize(f string) (int64, error) {
 	fi, err := os.Stat(f)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return fi.Size()
-}
-
-func check(e error) {
-	if e != nil {
-		log.Fatal(e)
-	}
+	return fi.Size(), err
 }
