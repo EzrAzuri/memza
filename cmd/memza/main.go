@@ -3,31 +3,35 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/rcompos/memza/memza"
 )
 
+// change to envvar and flag
 var memcachedServer string = "localhost:11211"
 
 func main() {
 
-	var fileName string
-	flag.StringVar(&fileName, "f", os.Getenv("MEMZA_FILE"), "File to store")
+	var filePut, fileGet, fileOut string
+	flag.StringVar(&filePut, "p", "", "File to put")
+	flag.StringVar(&fileGet, "g", "", "File to get")
+	flag.StringVar(&fileOut, "o", "out.dat", "Output file for retrieval")
 	flag.Parse()
-
-	if fileName == "" {
-		memza.HelpMe("Must supply file as argument (-f).")
-	}
-
 	var maxFileSize int64 = 1024 * 1024 * 50 // 50 MB
 
-	// Get number of required chunks for file
-	num, err := memza.NumChunks(fileName, maxFileSize)
-	if err != nil {
-		fmt.Println("ERROR: %v\n", err)
+	fmt.Printf("flags> %s, %s, %s\n", filePut, fileGet, fileOut)
+
+	if filePut == "" && fileGet == "" {
+		memza.HelpMe("Must supply file as argument (-p or -g).")
 	}
-	fmt.Printf("chunks: %v\n", num)
+
+	if filePut != "" {
+		memza.StoreFile(filePut, memcachedServer, maxFileSize)
+	}
+
+	if fileGet != "" {
+		memza.RetrieveFile(fileGet, memcachedServer, fileOut, maxFileSize)
+	}
 
 	//mc := memcache.New("10.0.0.1:11211", "10.0.0.2:11211", "10.0.0.3:11212")
 	//mc := memcache.New("localhost:11211")
