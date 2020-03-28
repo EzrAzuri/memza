@@ -7,11 +7,9 @@ import (
 	"github.com/rcompos/memza/memza"
 )
 
-// change to envvar and flag
-var memcachedServer string = "localhost:11211"
-
 func main() {
 
+	var memcachedServer string = "localhost:11211"
 	var filePut, fileGet, fileOut string
 	flag.StringVar(&filePut, "p", "", "File to put")
 	flag.StringVar(&fileGet, "g", "", "File to get")
