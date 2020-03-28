@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/rcompos/memza/memza"
 )
@@ -17,35 +18,24 @@ func main() {
 	flag.Parse()
 	var maxFileSize int64 = 1024 * 1024 * 50 // 50 MB
 
-	fmt.Printf("flags> %s, %s, %s\n", filePut, fileGet, fileOut)
+	//fmt.Printf("flags> %s, %s, %s\n", filePut, fileGet, fileOut)
 
 	if filePut == "" && fileGet == "" {
 		memza.HelpMe("Must supply file as argument (-p or -g).")
 	}
 
 	if filePut != "" {
-		memza.StoreFile(filePut, memcachedServer, maxFileSize)
+		if err := memza.StoreFile(filePut, memcachedServer, maxFileSize); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	if fileGet != "" {
-		memza.RetrieveFile(fileGet, memcachedServer, fileOut, maxFileSize)
+		if err := memza.RetrieveFile(fileGet, memcachedServer, fileOut, maxFileSize); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 	}
-
-	//mc := memcache.New("10.0.0.1:11211", "10.0.0.2:11211", "10.0.0.3:11212")
-	//mc := memcache.New("localhost:11211")
-
-	//memza.CheckServer(memcachedServer)
-
-	/*
-		var zkey string = "food"
-		var zval []byte = []byte("taco")
-		var zfla uint32 = 77
-		var zexp int32 = 4600
-	*/
-
-	//memza.Evaluator(memcachedServer, zkey, zval, zfla, zexp)
-
-	// // memza.Setter(memcachedServer, zkey, zval, zfla, zexp)
-	// // memza.Getter(memcachedServer, zkey)
 
 }

@@ -1,6 +1,7 @@
 package memza
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
 	"flag"
@@ -35,8 +36,8 @@ func UnChunker(f string) {
 func RetrieveFile(f, mserver, outFile string, max int64) error {
 
 	fmt.Printf("Retrieve key -> %s\n", f)
-	filehash, num, err := Getter(mserver, f)
-	check(err)
+	filehash, num, errGet := Getter(mserver, f)
+	check(errGet)
 
 	// Get number of required chunks for file
 	fmt.Printf("Key: %s\n", f)
@@ -44,8 +45,8 @@ func RetrieveFile(f, mserver, outFile string, max int64) error {
 	fmt.Printf("Filehash: %x\n", string(filehash))
 
 	// open file
-	file, err := os.Create(outFile)
-	check(err)
+	file, errCreate := os.Create(outFile)
+	check(errCreate)
 	defer file.Close()
 
 	// reconstitute
@@ -66,13 +67,20 @@ func RetrieveFile(f, mserver, outFile string, max int64) error {
 	fmt.Printf("Checking file sums\n")
 
 	// Read newly created file
-	data, oferr := ioutil.ReadFile(outFile)
-	check(oferr)
+	data, errRead := ioutil.ReadFile(outFile)
+	check(errRead)
 	// Hash the file and output results
 	newHash := sha256.Sum256(data)
 	fmt.Printf("SHA-256: %x\n", newHash)
 
-	//compareResult := bytes.Compare(filehash, newHash)
+	//badHash := []byte{'1', '9', 'a', 'f'} // For TESTING ONLY
+	//compareResult := bytes.Compare(filehash[:], badHash)
+	compareResult := bytes.Compare(filehash[:], newHash[:])
+	//fmt.Printf("Hash compare: %v\n", compareResult)
+	var err error
+	if compareResult != 0 {
+		err = errors.New("hash mismatch")
+	}
 
 	return err
 
@@ -99,7 +107,8 @@ func StoreFile(f, mserver string, max int64) error {
 	fmt.Printf("Setting item:\n")
 	fmt.Printf("\tKey: %s\n", f)
 	fmt.Printf("\tValue: %x\n", shasum)
-	errSetterFile := Setter(mserver, f, shasum, uint32(num), 0)
+
+	errSetterFile := Setter(mserver, f, shasum[:], uint32(num), 0)
 	check(errSetterFile)
 
 	// open file
@@ -210,7 +219,7 @@ func CheckServer(memcachedServer string) {
 }
 
 // numChunks determine number of chunks needed
-func numChunks(fileName string, chunksize int, max int64) (int, []byte, error) {
+func numChunks(fileName string, chunksize int, max int64) (int, [32]byte, error) {
 
 	//mc := memcache.New(mserver)
 	// Set key
@@ -221,14 +230,14 @@ func numChunks(fileName string, chunksize int, max int64) (int, []byte, error) {
 
 	// Empty file check
 	if sizeBytes == 0 {
-		return 0, []byte{}, errors.New("Zero file size!")
+		return 0, [32]byte{}, errors.New("Zero file size!")
 	}
 
 	// Max size check - 50MB
 	if sizeBytes > max {
 		fmt.Printf("Max size: %d\n", max)
 		errMsg := fmt.Sprintf("ERROR: File too large: %d\n", sizeBytes)
-		return 0, []byte{}, errors.New(errMsg)
+		return 0, [32]byte{}, errors.New(errMsg)
 	}
 
 	/*
@@ -262,7 +271,8 @@ func numChunks(fileName string, chunksize int, max int64) (int, []byte, error) {
 		intChunks += 1
 	}
 
-	return intChunks, fileSHA256[:], err
+	//return intChunks, fileSHA256[:], err
+	return intChunks, fileSHA256, err
 
 }
 
