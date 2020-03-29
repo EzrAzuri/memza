@@ -8,14 +8,21 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
+	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
 const devilsBytes int = 61
+
+//
+//
+//const devilsBytes int = 60 // TESING //
+//
+//
 const valueSizeMax int = 1024*1024 - devilsBytes
 
 // RetrieveFile get file contents for given key filename
@@ -41,7 +48,7 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 	}
 	defer file.Close()
 
-	// reconstitute
+	// Reconstitute
 	for i := 1; i <= int(num); i++ {
 		chunkKey := f + "-" + strconv.Itoa(i)
 		// Get single chunk
@@ -90,6 +97,15 @@ func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 
 	bufferSize := valueSizeMax - len(f)
 
+	/*
+		keyTest := strings.Repeat("z", len(f))
+		verifiedBuffSize, errBuffSize := findMaxValueSize(mserver, keyTest, bufferSize, dbug)
+		if errBuffSize != nil {
+			return errBuffSize
+		}
+		bufferSize = verifiedBuffSize
+	*/
+
 	// Get number of required chunks for file
 	num, shasum, err := numChunks(f, bufferSize, max, dbug)
 	if err != nil {
@@ -108,7 +124,7 @@ func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 	// Set key named after file with value of shasum
 	errSetterFile := setter(mserver, f, shasum[:], uint32(num), 0, dbug, force)
 	if errSetterFile != nil {
-		return err
+		return errSetterFile
 	}
 
 	// Open file
@@ -139,16 +155,52 @@ func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 			fmt.Printf("\tKey: %v\n", fileKey)
 		}
 
-		errSetterHash := setter(mserver, fileKey, buff, 0, 0, dbug, force)
-		if errSetterHash != nil {
-			return errSetterHash
+		errSet := setter(mserver, fileKey, buff, 0, 0, dbug, force)
+		if errSet != nil {
+			return err
 		}
 
 		i++
 	}
 
+	fmt.Printf("sha256sum: %x\n", shasum)
 	return err
 
+}
+
+func findMaxValueSize(mserver, key string, bufsize int, dbug bool) (int, error) {
+
+	tries := 1024       // Number of attempts to successfully set an item
+	incrementBytes := 1 // Number of bytes to reduce each attempt
+	tooLargeMsg := "SERVER_ERROR object too large for cache"
+	var errSet error
+	for k := 1; k <= tries; k++ {
+
+		token := make([]byte, bufsize)
+		rand.Read(token)
+		//fmt.Println(token)
+
+		errSet := setter(mserver, key, token, 0, 0, dbug, true)
+		if errSet != nil {
+			// match error "SERVER_ERROR object too large for cache"
+			if strings.Contains(errSet.Error(), tooLargeMsg) {
+				bufsize -= incrementBytes // reduce buffer by 10 bytes
+				if dbug == true {
+					fmt.Printf("Reducing buffer size: %v\n", bufsize)
+				}
+			}
+		} else {
+			if dbug == true {
+				fmt.Printf("New buffer size: %v\n", bufsize)
+			}
+			break
+		}
+		if k >= tries {
+			return bufsize, errSet
+		}
+	}
+
+	return bufsize, errSet
 }
 
 // setter is for setting mcache values
@@ -158,14 +210,14 @@ func setter(mserver, key string, val []byte, fla uint32, exp int32, dbug, force 
 	// Check for pre-existing key
 	_, _, errGet := getter(mserver, key, dbug)
 	if errGet == nil && force != true {
-		log.Fatal("key exists")
+		return errors.New("key exists")
 	}
 
 	// Set key
 	//fmt.Printf("Set key -> %s\tvalue: %s\tflag: %d\texp: %d\n", key, val, fla, exp)
 	err := mc.Set(&memcache.Item{Key: key, Value: val, Flags: fla, Expiration: exp})
-	if err != nil {
-		log.Fatal(err)
+	if dbug == true {
+		fmt.Printf("SETTER> %v\n", err)
 	}
 	return err
 }
@@ -179,7 +231,7 @@ func getter(mserver, key string, dbug bool) ([]byte, uint32, error) {
 	}
 	myitem, err := mc.Get(key)
 	if err != nil {
-		log.Fatal(err)
+		return []byte{}, 0, err
 	}
 	return myitem.Value, myitem.Flags, err
 }
