@@ -19,8 +19,7 @@ import (
 	"github.com/rcompos/memza/memza"
 )
 
-//var memcachedServer string = "localhost:11211"
-var memcachedServer string
+var MemcachedServer string
 var maxFileSize int64 = 1024 * 1024 * 50 // 50 MB
 var debug bool
 var fileOut string
@@ -28,14 +27,15 @@ var fileOut string
 func main() {
 
 	flag.StringVar(&fileOut, "o", "out.dat", "Output file for retrieval")
-	flag.StringVar(&memcachedServer, "s", os.Getenv("MEMCACHED_SERVER_URL"), "memcached_server:port")
+	flag.StringVar(&MemcachedServer, "s", os.Getenv("MEMCACHED_SERVER_URL"), "memcached_server:port")
 	//flag.StringVar(&memcachedServer, "s", "localhost:11211", "memcached_server:port")
 	flag.BoolVar(&debug, "d", false, "Debug mode")
 	flag.Parse()
 
-	if memcachedServer == "" {
-		memcachedServer = "localhost:11211"
+	if MemcachedServer == "" {
+		MemcachedServer = "localhost:11211"
 	}
+	memza.MemcachedServer = MemcachedServer
 
 	dir, err := os.Getwd()
 
@@ -53,6 +53,7 @@ func main() {
 	http.HandleFunc("/retrieve", retrieveHandler) // memcached key retrieval
 
 	http.HandleFunc("/test", testHandler) // Handle test
+	http.HandleFunc("/info", memza.Info)  // Handle test
 	http.Handle("/", http.FileServer(http.Dir(dir)))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
@@ -110,9 +111,9 @@ func receiveHandler(w http.ResponseWriter, r *http.Request) {
 	//fmt.Fprintf(w, "File uploaded: ")
 	//fmt.Fprintf(w, uploadedFile+"\n")
 
-	fmt.Fprintf(w, "memcacheServer: %s\n", memcachedServer)
+	fmt.Fprintf(w, "memcacheServer: %s\n", MemcachedServer)
 	fmt.Fprintf(w, "Storing file in memcache: %s\n", uploadedFile)
-	sha, errStore := memza.StoreFile(uploadedFile, memcachedServer, maxFileSize, debug, true)
+	sha, errStore := memza.StoreFile(uploadedFile, MemcachedServer, maxFileSize, debug, true)
 	if errStore != nil {
 		fmt.Printf("error: store file in memcached failed\n")
 		return
@@ -154,7 +155,7 @@ func retrieveHandler(w http.ResponseWriter, r *http.Request) {
 	requestedKey := r.FormValue("key")
 
 	//fmt.Fprintf(w, "Retrieving file from memcache: %s\n", requestedKey)
-	data, err := memza.RetrieveFile(requestedKey, memcachedServer, fileOut, debug)
+	data, err := memza.RetrieveFile(requestedKey, MemcachedServer, fileOut, debug)
 	if err != nil {
 		fmt.Printf("error: retrieve file from memcached failed\n")
 		return

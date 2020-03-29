@@ -10,7 +10,7 @@ Requirement: Memcached server
 ⇒ docker container run -p 11211:11211 -d memcached  -m 1000
 ```
 
-Requirement: Must set Memcached server name:port as command-line arg (-s) or environmental variable MEMCACHED\_SERVER\_URL.
+Requirement: Must set Memcached server name:port as command-line arg (-s) or environmental variable MEMCACHED\_SERVER\_URL.  If no Memcache server is specified, the local host is used.
 
 ```
 ⇒ export MEMCACHED_SERVER_URL=0.0.0.0:11211
@@ -40,10 +40,16 @@ CLI Usage:
 ```
 
 Run on command-line without building binary:
-Store a file:
+Store a file on local Memcached:
 
 ```
 ⇒ go run cmd/memza-cli/main.go -p myfile.dat
+```
+
+Store a file on remote Memcached
+
+```
+⇒ go run cmd/memza-cli/main.go -s 192.168.1.128:11211 -p myfile.dat
 ```
 
 Retrieve a file:
@@ -64,13 +70,13 @@ Alternatley, build a binary:
 
 # Memza API
 
-Build API service binary and run service.
+Build API service binary and run service in debugging mode (-d) with a server specifcation (-s).  
 
 ```
 ⇒ cd cmd/memza
 ⇒ go build -o memza
 
-⇒ ./memza
+⇒ ./memza -d -s 192.168.1.128:11211
 ```
 
 Alternately, run API service binary without building binary
@@ -106,5 +112,5 @@ Build Docker image from repo top-level directory
 Run Docker image with Memcached server as envvar
 
 ```
-⇒ docker container run -d --rm -p 8080:8080 --env MEMCACHED_SERVER_URL=192.168.1.128:11211 memza
+⇒ docker container run -d -p 8080:8080 --env MEMCACHED_SERVER_URL=192.168.1.128:11211 memza
 ```

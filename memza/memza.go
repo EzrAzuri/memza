@@ -19,6 +19,8 @@ import (
 const devilsBytes int = 62
 const valueSizeMax int = 1024*1024 - devilsBytes
 
+var MemcachedServer string
+
 //var HttpURL string
 
 // RetrieveFile get file contents for given key filename
@@ -313,27 +315,11 @@ func Info(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "Host = %q\n", r.Host)
 	fmt.Fprintf(w, "RemoteAddr = %q\n", r.RemoteAddr)
+	fmt.Fprintf(w, "MemcachedServer= %q\n", MemcachedServer)
 	if err := r.ParseForm(); err != nil {
 		log.Print(err)
 	}
 	for k, v := range r.Form {
 		fmt.Fprintf(w, "Form[%q] = %q\n", k, v)
 	}
-}
-
-// Ping Test function
-func Ping(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("pong"))
-}
-
-// PostFile Set file contents as memcached item value
-func PostFile(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("PostFile"))
-	//log.Println("pong")
-}
-
-// GetFile Get file from memcached item value
-func GetFile(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("GetFile"))
-	//log.Println("pong")
 }
