@@ -14,9 +14,7 @@ Requirement: Must set Memcached server name:port as command-line arg (-s) or env
 
 ```
 ⇒ export MEMCACHED_SERVER_URL=0.0.0.0:11211
-
-or
-
+	or
 ⇒ export MEMCACHED_SERVER_URL=192.168.1.128:11211
 ```
 
@@ -75,7 +73,6 @@ Build API service binary and run service in debugging mode (-d) with a server sp
 ```
 ⇒ cd cmd/memza
 ⇒ go build -o memza
-
 ⇒ ./memza -d -s 192.168.1.128:11211
 ```
 
@@ -85,18 +82,28 @@ Alternately, run API service binary without building binary
 ⇒ go run cmd/memza-api/main.go
 ```
 
-Endpoint URIs for web browser:
+Endpoint for web browser file upload
 
 ```
 http://localhost:8080/upload
+```
+
+Endpoint for web browser file download
+
+```
 http://localhost:8080/download
 ```
 
-Curl commands:
+Curl command to post file:
 
 ```
-⇒ curl http://localhost:8080/upload
-⇒ curl http://localhost:8080/download
+⇒ curl -F 'file=@/path/to/myfile.dat' http://localhost:8080/receive
+```
+
+Curl command to get file
+
+```
+⇒ curl "http://localhost:8080/retrieve?key=myfile.dat" --output out.dat
 ```
 
 # Memza Docker
