@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
+	"net/http"
 	"os"
 	"strconv"
 
@@ -17,13 +19,15 @@ import (
 const devilsBytes int = 62
 const valueSizeMax int = 1024*1024 - devilsBytes
 
+//var HttpURL string
+
 // RetrieveFile get file contents for given key filename
-func RetrieveFile(f, mserver, outFile string, dbug bool) error {
+func RetrieveFile(f, mserver, outFile string, dbug bool) ([]byte, error) {
 
 	// Get number of required chunks for file
 	filehash, num, errGet := getter(mserver, f, dbug)
 	if errGet != nil {
-		return errGet
+		return []byte{}, errGet
 	}
 
 	if dbug == true {
@@ -36,7 +40,7 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 	// Open file
 	file, errCreate := os.Create(outFile)
 	if errCreate != nil {
-		return errCreate
+		return []byte{}, errCreate
 	}
 	defer file.Close()
 
@@ -46,7 +50,7 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 		// Get single chunk
 		chunkItem, _, err := getter(mserver, chunkKey, dbug)
 		if err != nil {
-			return err
+			return []byte{}, err
 		}
 		// Write file
 		n2, werr := file.Write(chunkItem)
@@ -56,7 +60,7 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 			fmt.Printf("\tBytes written: %d\n", n2)
 
 			if werr != nil {
-				return werr
+				return []byte{}, werr
 			}
 		}
 	}
@@ -64,7 +68,7 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 	// Read newly created file
 	data, errRead := ioutil.ReadFile(outFile)
 	if errRead != nil {
-		return errRead
+		return []byte{}, errRead
 	}
 
 	// Hash the file and output results
@@ -82,21 +86,21 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 		err = errors.New("hash mismatch")
 	}
 
-	fmt.Printf("%s", data)
+	//fmt.Printf("%s", data)
 
-	return err
+	return data, err
 
 }
 
 // StoreFile key: filename, value: file contents
-func StoreFile(f, mserver string, max int64, dbug, force bool) error {
+func StoreFile(f, mserver string, max int64, dbug, force bool) ([32]byte, error) {
 
 	bufferSize := valueSizeMax - len(f)
 
 	// Get number of required chunks for file
 	num, shasum, err := numChunks(f, bufferSize, max, dbug)
 	if err != nil {
-		return err
+		return [32]byte{}, err
 	}
 
 	if dbug == true {
@@ -111,13 +115,13 @@ func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 	// Set key named after file with value of shasum
 	errSetterFile := setter(mserver, f, shasum[:], uint32(num), 0, dbug, force)
 	if errSetterFile != nil {
-		return errSetterFile
+		return [32]byte{}, errSetterFile
 	}
 
 	// Open file
 	file, errOpen := os.Open(f)
 	if errOpen != nil {
-		return errOpen
+		return [32]byte{}, errOpen
 	}
 	defer file.Close()
 
@@ -127,7 +131,7 @@ func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 		bytesread, err := file.Read(buffer)
 		if err != nil {
 			if err != io.EOF {
-				return err
+				return [32]byte{}, err
 			}
 			break
 		}
@@ -144,7 +148,7 @@ func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 
 		errSet := setter(mserver, fileKey, buff, 0, 0, dbug, force)
 		if errSet != nil {
-			return err
+			return [32]byte{}, err
 		}
 
 		i++
@@ -152,7 +156,7 @@ func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 
 	fmt.Printf("key: %s\n", f)
 	fmt.Printf("sha256sum: %x\n", shasum)
-	return err
+	return shasum, err
 
 }
 
@@ -292,4 +296,38 @@ func HelpMe(msg string) {
 func fileSize(f string) (int64, error) {
 	fi, err := os.Stat(f)
 	return fi.Size(), err
+}
+
+// Info handler displays http header
+func Info(w http.ResponseWriter, r *http.Request) {
+	//fmt.Fprintf(w, "URL.Path = %q\n", r.URL.Path)
+	fmt.Fprintf(w, "%s %s %s\n", r.Method, r.URL, r.Proto)
+	for k, v := range r.Header {
+		fmt.Fprintf(w, "Header[%q] = %q\n", k, v)
+	}
+	fmt.Fprintf(w, "Host = %q\n", r.Host)
+	fmt.Fprintf(w, "RemoteAddr = %q\n", r.RemoteAddr)
+	if err := r.ParseForm(); err != nil {
+		log.Print(err)
+	}
+	for k, v := range r.Form {
+		fmt.Fprintf(w, "Form[%q] = %q\n", k, v)
+	}
+}
+
+// Ping Test function
+func Ping(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("pong"))
+}
+
+// PostFile Set file contents as memcached item value
+func PostFile(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("PostFile"))
+	//log.Println("pong")
+}
+
+// GetFile Get file from memcached item value
+func GetFile(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("GetFile"))
+	//log.Println("pong")
 }

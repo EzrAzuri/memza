@@ -36,17 +36,19 @@ func main() {
 	}
 
 	if filePut != "" {
-		if err := memza.StoreFile(filePut, memcachedServer, maxFileSize, debug, force); err != nil {
+		if _, err := memza.StoreFile(filePut, memcachedServer, maxFileSize, debug, force); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
 	}
 
 	if fileGet != "" {
-		if err := memza.RetrieveFile(fileGet, memcachedServer, fileOut, debug); err != nil {
+		data, err := memza.RetrieveFile(fileGet, memcachedServer, fileOut, debug)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
+		fmt.Printf("%s", data)
 	}
 
 	if test == true {
