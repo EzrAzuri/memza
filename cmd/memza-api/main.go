@@ -22,12 +22,12 @@ import (
 var memcachedServer string = "localhost:11211"
 var maxFileSize int64 = 1024 * 1024 * 50 // 50 MB
 var debug bool
+var fileOut string
 
 func main() {
 
-	var fileOut, memcachedServer string
 	flag.StringVar(&fileOut, "o", "out.dat", "Output file for retrieval")
-	flag.StringVar(&memcachedServer, "s", os.Getenv("MEMCACHED_SERVER_URL"), "memcached_server:port")
+	//flag.StringVar(&memcachedServer, "s", os.Getenv("MEMCACHED_SERVER_URL"), "memcached_server:port")
 	flag.BoolVar(&debug, "d", false, "Debug mode")
 	flag.Parse()
 
@@ -37,9 +37,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// upload -> receive
 	http.HandleFunc("/upload", uploadHandler)   // Display a form for user to upload file
-	http.HandleFunc("/receive", receiveHandler) // Handle the incoming file
-	http.HandleFunc("/test", testHandler)       // Handle the incoming file
+	http.HandleFunc("/receive", receiveHandler) // Handle incoming file
+
+	// request -> retrieve
+	http.HandleFunc("/download", downloadHandler) // Display a form for memcached key request
+	http.HandleFunc("/retrieve", retrieveHandler) // memcached key retrieval
+
+	http.HandleFunc("/test", testHandler) // Handle test
 	http.Handle("/", http.FileServer(http.Dir(dir)))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
@@ -49,13 +55,13 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		fmt.Fprintf(w, `<html>
 <head>
-  <title>GoLang HTTP Fileserver</title>
+  <title>Go HTTP Fileserver</title>
 </head>
 <body>
 <h2>Upload a file</h2>
 <form action="/receive" method="post" enctype="multipart/form-data">
-  <label for="file">Filename:</label>
-  <input type="file" name="file" id="file">
+  <label for="file">Filename:</label><br>
+  <input type="file" name="file" id="file"><br>
   <br>
   <input type="submit" name="submit" value="Submit">
 </form>
@@ -97,6 +103,7 @@ func receiveHandler(w http.ResponseWriter, r *http.Request) {
 	//fmt.Fprintf(w, "File uploaded: ")
 	//fmt.Fprintf(w, uploadedFile+"\n")
 
+	fmt.Fprintf(w, "memcacheServer: %s\n", memcachedServer)
 	fmt.Fprintf(w, "Storing file in memcache: %s\n", uploadedFile)
 	sha, errStore := memza.StoreFile(uploadedFile, memcachedServer, maxFileSize, debug, true)
 	if errStore != nil {
@@ -105,6 +112,41 @@ func receiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "key: %s\n", uploadedFile)
 	fmt.Fprintf(w, "sha256sum: %x\n", sha)
+
+}
+
+func downloadHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		fmt.Fprintf(w, `<html>
+<head>
+  <title>Go HTTP Fileserver</title>
+</head>
+<body>
+<h2>Request Memcached Key</h2>
+<form action="/retrieve" method="post">
+  <label for="key">memcache key:</label><br>
+  <input type="text" name="key" id="key"><br>
+</form>
+</body>
+</html>`)
+	}
+}
+
+// retrieveHandler accepts the memcached key request
+func retrieveHandler(w http.ResponseWriter, r *http.Request) {
+
+	// take in POST input values
+	//file, header, err := r.FormFile("file")
+
+	requestedKey := r.FormValue("key")
+
+	//fmt.Fprintf(w, "Retrieving file from memcache: %s\n", requestedKey)
+	data, err := memza.RetrieveFile(requestedKey, memcachedServer, fileOut, debug)
+	if err != nil {
+		fmt.Printf("error: retrieve file from memcached failed\n")
+		return
+	}
+	fmt.Fprintf(w, "%s", data)
 
 }
 
