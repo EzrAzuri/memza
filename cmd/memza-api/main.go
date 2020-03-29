@@ -19,7 +19,8 @@ import (
 	"github.com/rcompos/memza/memza"
 )
 
-var memcachedServer string = "localhost:11211"
+//var memcachedServer string = "localhost:11211"
+var memcachedServer string
 var maxFileSize int64 = 1024 * 1024 * 50 // 50 MB
 var debug bool
 var fileOut string
@@ -27,11 +28,17 @@ var fileOut string
 func main() {
 
 	flag.StringVar(&fileOut, "o", "out.dat", "Output file for retrieval")
-	//flag.StringVar(&memcachedServer, "s", os.Getenv("MEMCACHED_SERVER_URL"), "memcached_server:port")
+	flag.StringVar(&memcachedServer, "s", os.Getenv("MEMCACHED_SERVER_URL"), "memcached_server:port")
+	//flag.StringVar(&memcachedServer, "s", "localhost:11211", "memcached_server:port")
 	flag.BoolVar(&debug, "d", false, "Debug mode")
 	flag.Parse()
 
+	if memcachedServer == "" {
+		memcachedServer = "localhost:11211"
+	}
+
 	dir, err := os.Getwd()
+
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		os.Exit(1)
@@ -109,6 +116,12 @@ func receiveHandler(w http.ResponseWriter, r *http.Request) {
 	if errStore != nil {
 		fmt.Printf("error: store file in memcached failed\n")
 		return
+	}
+
+	// Delete file
+	errRemove := os.Remove(uploadedFile)
+	if errRemove != nil {
+		fmt.Printf("error: %v\n", errRemove)
 	}
 	fmt.Fprintf(w, "key: %s\n", uploadedFile)
 	fmt.Fprintf(w, "sha256sum: %x\n", sha)

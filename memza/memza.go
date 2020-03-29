@@ -71,6 +71,12 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) ([]byte, error) {
 		return []byte{}, errRead
 	}
 
+	// Delete file
+	errRemove := os.Remove(outFile)
+	if errRemove != nil {
+		fmt.Printf("error: %v\n", errRemove)
+	}
+
 	// Hash the file and output results
 	newHash := sha256.Sum256(data)
 
