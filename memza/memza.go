@@ -8,21 +8,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
-const devilsBytes int = 61
-
-//
-//
-//const devilsBytes int = 60 // TESING //
-//
-//
+const devilsBytes int = 62
 const valueSizeMax int = 1024*1024 - devilsBytes
 
 // RetrieveFile get file contents for given key filename
@@ -78,7 +70,9 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 	// Hash the file and output results
 	newHash := sha256.Sum256(data)
 
-	fmt.Printf("%s %x\n", outFile, newHash)
+	if dbug == true {
+		fmt.Printf("%s: sha256sum: %x\n", outFile, newHash)
+	}
 
 	//badHash := []byte{'1', '9', 'a', 'f'} // For TESTING ONLY
 
@@ -88,6 +82,8 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 		err = errors.New("hash mismatch")
 	}
 
+	fmt.Printf("%s", data)
+
 	return err
 
 }
@@ -96,15 +92,6 @@ func RetrieveFile(f, mserver, outFile string, dbug bool) error {
 func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 
 	bufferSize := valueSizeMax - len(f)
-
-	/*
-		keyTest := strings.Repeat("z", len(f))
-		verifiedBuffSize, errBuffSize := findMaxValueSize(mserver, keyTest, bufferSize, dbug)
-		if errBuffSize != nil {
-			return errBuffSize
-		}
-		bufferSize = verifiedBuffSize
-	*/
 
 	// Get number of required chunks for file
 	num, shasum, err := numChunks(f, bufferSize, max, dbug)
@@ -163,44 +150,10 @@ func StoreFile(f, mserver string, max int64, dbug, force bool) error {
 		i++
 	}
 
+	fmt.Printf("key: %s\n", f)
 	fmt.Printf("sha256sum: %x\n", shasum)
 	return err
 
-}
-
-func findMaxValueSize(mserver, key string, bufsize int, dbug bool) (int, error) {
-
-	tries := 1024       // Number of attempts to successfully set an item
-	incrementBytes := 1 // Number of bytes to reduce each attempt
-	tooLargeMsg := "SERVER_ERROR object too large for cache"
-	var errSet error
-	for k := 1; k <= tries; k++ {
-
-		token := make([]byte, bufsize)
-		rand.Read(token)
-		//fmt.Println(token)
-
-		errSet := setter(mserver, key, token, 0, 0, dbug, true)
-		if errSet != nil {
-			// match error "SERVER_ERROR object too large for cache"
-			if strings.Contains(errSet.Error(), tooLargeMsg) {
-				bufsize -= incrementBytes // reduce buffer by 10 bytes
-				if dbug == true {
-					fmt.Printf("Reducing buffer size: %v\n", bufsize)
-				}
-			}
-		} else {
-			if dbug == true {
-				fmt.Printf("New buffer size: %v\n", bufsize)
-			}
-			break
-		}
-		if k >= tries {
-			return bufsize, errSet
-		}
-	}
-
-	return bufsize, errSet
 }
 
 // setter is for setting mcache values
