@@ -76,7 +76,7 @@ Build API service binary and run service in debugging mode (-d) with a server sp
 ⇒ ./memza -d -s 192.168.1.128:11211
 ```
 
-Alternately, run API service binary without building binary
+Alternately, run API service without building binary
 
 ```
 ⇒ go run cmd/memza-api/main.go
@@ -103,7 +103,7 @@ Curl command to post file:
 Curl command to get file
 
 ```
-⇒ curl "http://localhost:8080/retrieve?key=myfile.dat" --output out.dat
+⇒ curl "http://localhost:8080/retrieve?key=/path/to/myfile.dat" --output out.dat
 ```
 
 # Memza Docker
