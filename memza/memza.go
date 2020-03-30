@@ -1,5 +1,10 @@
 package memza
 
+// Memza will upload and download files to Memcache
+// If the file is larger than 1MB, it is chunked
+// When retrieved, the chunks are reconstituted
+// Maximum file size is maxFileSize
+
 import (
 	"bytes"
 	"crypto/sha256"

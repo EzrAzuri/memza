@@ -1,12 +1,9 @@
 package main
 
-//
-// This example is an HTTP server that can receive a file upload.
-// https://www.socketloop.com/tutorials/golang-upload-file
-//
-// To upload a file, go to :8080/upload
-// To download file, go to :8080/
-//
+// Memza will upload and download files to Memcache
+// If the file is larger than 1MB, it is chunked
+// When retrieved, the chunks are reconstituted
+// Maximum file size is maxFileSize
 
 import (
 	"flag"
