@@ -63,10 +63,10 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		fmt.Fprintf(w, `<html>
 <head>
-  <title>Go HTTP Fileserver</title>
+  <title>Memza Upload</title>
 </head>
 <body>
-<h2>Upload a file</h2>
+<h3>Memza - Upload a file to Memcache</h3>
 <form action="/receive" method="post" enctype="multipart/form-data">
   <label for="file">Filename:</label><br>
   <input type="file" name="file" id="file"><br>
@@ -133,7 +133,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		fmt.Fprintf(w, `<html>
 <head>
-  <title>Go HTTP Fileserver</title>
+  <title>Memza Download</title>
 </head>
 <body>
 <h2>Request Memcached Key</h2>

@@ -110,6 +110,11 @@ func StoreFile(f, mserver string, max int64, dbug, force bool) ([32]byte, error)
 
 	bufferSize := valueSizeMax - len(f)
 
+	if _, err := os.Stat(f); os.IsNotExist(err) {
+		// file does not exist
+		return [32]byte{}, err
+	}
+
 	// Get number of required chunks for file
 	num, shasum, err := numChunks(f, bufferSize, max, dbug)
 	if err != nil {
